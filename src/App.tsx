@@ -1,19 +1,14 @@
-import { useMemo, useReducer, useEffect } from "react";
-import type { Team } from "./models/types";
-import { DirectoryActionType, TeamFilter, Team as TeamEnum } from "./models/types";
+import { useEffect, useMemo, useState } from "react";
+import { TeamFilter, SortMode } from "./models/types";
 import { usePeople } from "./hooks/usePeople";
 import { ApiService } from "./services/api";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  directoryReducer,
-  initialDirectoryState,
-} from "./state/directory.reducer";
-import {
-  selectDenormalizedPeople,
-  selectVisiblePeople,
-  selectGroupedByTeam,
-  selectTeamStats,
-} from "./state/directory.selectors";
+import { useDirectoryStore } from "./store/directoryStore";
+import { useTeamStats } from "./hooks/useTeamStats";
+import { useFilteredPeople } from "./hooks/useFilteredPeople";
+import { PeopleGrid } from "./components/ui/PeopleGrid";
+import { SEARCH_PLACEHOLDER } from "./constants";
+import { debugLog } from "./utils/helpers";
 import {
   Container,
   Title,
@@ -23,27 +18,8 @@ import {
   StatsContainer,
   StatsGrid,
   StatCard,
-  TeamsContainer,
-  TeamSection,
-  TeamTitle,
-  NoResults,
-  PeopleGrid,
-  PersonCard,
-  PersonInfo,
-  PersonHeader,
-  PersonName,
-  RoleLevelBadge,
-  StatusBadge,
-  SkillsContainer,
-  SkillBadge,
-  PersonMeta,
-  ActionsContainer,
-  Button,
-  MoveTeamLabel,
-  TeamSelect,
   DebugContainer,
   DebugPre,
-  LoadingContainer,
   ErrorContainer,
   RetryButton,
   DebugControls,
@@ -51,41 +27,72 @@ import {
 } from "./styles/App.styles";
 
 export default function App() {
-  const [state, dispatch] = useReducer(directoryReducer, initialDirectoryState);
   const { data: people, isLoading, error, refetch, isFetching } = usePeople();
   const queryClient = useQueryClient();
+  
+  // Debug state for forcing skeleton loading
+  const [forceLoading, setForceLoading] = useState(false);
+  
+  // Zustand store - use individual selectors to prevent infinite loops
+  const setPeople = useDirectoryStore(state => state.setPeople);
+  const selectedTeam = useDirectoryStore(state => state.selectedTeam);
+  const setSelectedTeam = useDirectoryStore(state => state.setSelectedTeam);
+  const search = useDirectoryStore(state => state.search);
+  const setSearch = useDirectoryStore(state => state.setSearch);
+  const sort = useDirectoryStore(state => state.sort);
+  const setSort = useDirectoryStore(state => state.setSort);
+  const showInactive = useDirectoryStore(state => state.showInactive);
+  const toggleShowInactive = useDirectoryStore(state => state.toggleShowInactive);
+  const promotePerson = useDirectoryStore(state => state.promotePerson);
+  const movePersonToTeam = useDirectoryStore(state => state.movePersonToTeam);
+  const toggleActive = useDirectoryStore(state => state.toggleActive);
+  const peopleById = useDirectoryStore(state => state.peopleById);
 
-  // Update reducer when people data changes
+  // Computed values - compute locally to prevent infinite loops
+  const allPeople = useMemo(() => Object.values(peopleById), [peopleById]);
+
+  // Use optimized custom hooks
+  const stats = useTeamStats(allPeople);
+  const { visiblePeople, grouped } = useFilteredPeople(
+    allPeople, 
+    selectedTeam, 
+    search, 
+    showInactive, 
+    sort
+  );
+
+  // Update store when people data changes
   useEffect(() => {
     if (people) {
-      dispatch({ type: DirectoryActionType.SET_PEOPLE, people });
+      debugLog("Setting people in store:", people);
+      setPeople(people);
     }
-  }, [people]);
+  }, [people, setPeople]);
 
   const handleSimulateError = () => {
-    console.log("Simulating error");
+    debugLog("Simulating error");
     ApiService.setForceError(true);
     // Reset the query to clear any previous error state, then refetch
     queryClient.resetQueries({ queryKey: ["people"] });
     refetch();
   };
 
-  const allPeople = useMemo(() => selectDenormalizedPeople(state), [state]);
-  const visiblePeople = useMemo(() => selectVisiblePeople(state), [state]);
-  const grouped = useMemo(() => selectGroupedByTeam(state), [state]);
-  const stats = useMemo(() => selectTeamStats(state), [state]);
+  const handleResetAll = () => {
+    debugLog("Resetting all changes");
+    // Reset all store state to initial values
+    setSelectedTeam(TeamFilter.ALL);
+    setSearch('');
+    setSort(SortMode.NAME_ASC);
+    toggleShowInactive(); // Toggle twice to get back to true
+    toggleShowInactive();
+    
+    // Refetch fresh data from API
+    queryClient.resetQueries({ queryKey: ["people"] });
+    refetch();
+  };
 
-  // Show loading state
-  if (isLoading) {
-    return (
-      <Container>
-        <Title>Team Directory</Title>
-        <LoadingContainer>
-          Loading team data...
-        </LoadingContainer>
-      </Container>
-    );
-  }
+  debugLog("App state:", { allPeople, visiblePeople, grouped, stats });
+
   // Show error state
   if (error) {
     return (
@@ -139,16 +146,29 @@ export default function App() {
         >
           Simulate Error
         </DebugButton>
+        <DebugButton 
+          onClick={handleResetAll}
+          disabled={isFetching}
+          style={{ marginLeft: '8px' }}
+        >
+          Reset All
+        </DebugButton>
+        <DebugButton 
+          onClick={() => setForceLoading(!forceLoading)}
+          disabled={isFetching}
+          style={{ marginLeft: '8px' }}
+        >
+          Skeleton: {forceLoading ? 'ON' : 'OFF'}
+        </DebugButton>
       </DebugControls>
+
       {/* Controls */}
       <ControlsContainer>
         <Label>
           Team{" "}
           <select
-            value={state.selectedTeam}
-            onChange={(e) =>
-              dispatch({ type: DirectoryActionType.SET_TEAM, team: e.target.value as any })
-            }
+            value={selectedTeam}
+            onChange={(e) => setSelectedTeam(e.target.value as TeamFilter)}
           >
             <option value={TeamFilter.ALL}>All</option>
             {Object.values(TeamFilter).filter(value => value !== TeamFilter.ALL).map((team) => (
@@ -162,30 +182,28 @@ export default function App() {
         <Label>
           Search{" "}
           <input
-            value={state.search}
-            onChange={(e) => dispatch({ type: DirectoryActionType.SET_SEARCH, search: e.target.value })}
-            placeholder="name or skill..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={SEARCH_PLACEHOLDER}
           />
         </Label>
 
         <Label>
           Sort{" "}
           <select
-            value={state.sort}
-            onChange={(e) =>
-              dispatch({ type: DirectoryActionType.SET_SORT, sort: e.target.value as any })
-            }
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortMode)}
           >
-            <option value="NAME_ASC">Name A-Z</option>
-            <option value="LEVEL_DESC">Level high-low</option>
+            <option value={SortMode.NAME_ASC}>Name A-Z</option>
+            <option value={SortMode.LEVEL_DESC}>Level high-low</option>
           </select>
         </Label>
 
         <CheckboxLabel>
           <input
             type="checkbox"
-            checked={state.showInactive}
-            onChange={() => dispatch({ type: DirectoryActionType.TOGGLE_SHOW_INACTIVE })}
+            checked={showInactive}
+            onChange={() => toggleShowInactive()}
           />
           Show inactive
         </CheckboxLabel>
@@ -207,86 +225,19 @@ export default function App() {
       </StatsContainer>
 
       {/* Render grouped teams */}
-      <TeamsContainer>
-        {grouped.map(({ team, members }) => (
-          <TeamSection key={team}>
-            <TeamTitle>{team}</TeamTitle>
-
-            {members.length === 0 ? (
-              <NoResults>No results</NoResults>
-            ) : (
-              <PeopleGrid>
-                {members.map((p) => (
-                  <PersonCard key={p.id}>
-                    <PersonInfo>
-                      <PersonHeader>
-                        <PersonName>{p.name}</PersonName>
-                        <RoleLevelBadge>
-                          {p.role} L{p.level}
-                        </RoleLevelBadge>
-                        <StatusBadge isActive={p.isActive}>
-                          {p.isActive ? "Active" : "Inactive"}
-                        </StatusBadge>
-                      </PersonHeader>
-
-                      <SkillsContainer>
-                        {p.skills.map((s) => (
-                          <SkillBadge key={s}>
-                            {s}
-                          </SkillBadge>
-                        ))}
-                      </SkillsContainer>
-                      {p?.reportsToId !== undefined && (
-                        <PersonMeta>
-                        Reports To: {members.find((m) => m.id === p.reportsToId)?.name}
-                      </PersonMeta>
-                      )}
-                      <PersonMeta>
-                        Team: {p.team}
-                      </PersonMeta>
-                    </PersonInfo>
-
-                    <ActionsContainer>
-                      <Button disabled={!p.isActive} onClick={() => dispatch({ type: DirectoryActionType.PROMOTE, personId: p.id })}>
-                        Promote
-                      </Button>
-                      <Button onClick={() => dispatch({ type: DirectoryActionType.TOGGLE_ACTIVE, personId: p.id })}>
-                        Toggle active
-                      </Button>
-
-                      <MoveTeamLabel>
-                        Move team
-                        <TeamSelect
-                          value={p.team}
-                          onChange={(e) =>
-                            dispatch({
-                              type: DirectoryActionType.MOVE_TEAM,
-                              personId: p.id,
-                              team: e.target.value as Team,
-                            })
-                          }
-                        >
-                          {Object.values(TeamEnum).map((t) => (
-                            <option key={t} value={t}>
-                              {t}
-                            </option>
-                          ))}
-                        </TeamSelect>
-                      </MoveTeamLabel>
-                    </ActionsContainer>
-                  </PersonCard>
-                ))}
-              </PeopleGrid>
-            )}
-          </TeamSection>
-        ))}
-      </TeamsContainer>
+      <PeopleGrid
+        grouped={grouped}
+        promotePerson={promotePerson}
+        toggleActive={toggleActive}
+        movePersonToTeam={(id, team) => movePersonToTeam(id, team as any)}
+        isLoading={isLoading || forceLoading}
+      />
 
       {/* Debug */}
       <DebugContainer>
         <summary>Debug</summary>
         <DebugPre>
-          {JSON.stringify({ state, allPeople, visiblePeople }, null, 2)}
+          {JSON.stringify({ selectedTeam, search, sort, showInactive, allPeople, visiblePeople }, null, 2)}
         </DebugPre>
       </DebugContainer>
     </Container>

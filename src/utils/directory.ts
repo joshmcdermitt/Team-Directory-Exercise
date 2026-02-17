@@ -1,4 +1,4 @@
-import type { DirectoryState, Person, Team, TeamStats, Level } from "../models/types";
+import type { Person, Team, TeamStats, Level } from "../models/types";
 import { Role, SortMode, TeamFilter } from "../models/types";
 
 
@@ -38,13 +38,13 @@ export function groupByTeam(
 
 export function applyFilters(
   people: Person[],
-  state: Pick<DirectoryState, "selectedTeam" | "search" | "showInactive">
+  filters: { selectedTeam: string; search: string; showInactive: boolean }
 ): Person[] {
   // Early return if no filters are active
   if (
-    state.selectedTeam === TeamFilter.ALL &&
-    state.showInactive &&
-    !state.search.trim()
+    filters.selectedTeam === TeamFilter.ALL &&
+    filters.showInactive &&
+    !filters.search.trim()
   ) {
     return people;
   }
@@ -52,27 +52,27 @@ export function applyFilters(
   let filtered = people;
   
   // Filter by team
-  if (state.selectedTeam !== TeamFilter.ALL) {
-    filtered = filtered.filter((person) => person.team === state.selectedTeam as unknown as Team);
+  if (filters.selectedTeam !== TeamFilter.ALL) {
+    filtered = filtered.filter(p => p.team === filters.selectedTeam);
+  }
+  
+  // Filter by search
+  if (filters.search.trim()) {
+    const searchLower = filters.search.toLowerCase();
+    filtered = filtered.filter(p => 
+      p.name.toLowerCase().includes(searchLower) ||
+      p.skills.some(skill => skill.toLowerCase().includes(searchLower))
+    );
   }
   
   // Filter by active status
-  if (!state.showInactive) {
-    filtered = filtered.filter((person) => person.isActive);
-  }
-  
-  // Filter by search term
-  if (state.search.trim()) {
-    const searchTerm = state.search.toLowerCase();
-    filtered = filtered.filter((person) => 
-      person.name.toLowerCase().includes(searchTerm) ||
-      person.skills.some((skill) => skill.toLowerCase().includes(searchTerm))
-    );
+  if (!filters.showInactive) {
+    filtered = filtered.filter(p => p.isActive);
   }
   return filtered;
 }
 
-export function applySort(people: Person[], sort: DirectoryState["sort"]): Person[] {
+export function applySort(people: Person[], sort: SortMode): Person[] {
   const copy = [...people];
 
   switch (sort) {

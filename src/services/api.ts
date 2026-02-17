@@ -1,9 +1,10 @@
 import type { Person } from "../models/types";
 import { seedPeople } from "../data/seed";
+import { API_DELAY } from "../constants";
 
 // Mock API service that simulates network delay and potential errors
 export class ApiService {
-  private static readonly DELAY = 200; // 200ms delay for better UX
+  private static readonly DELAY = API_DELAY; // 200ms delay for better UX
   private static forceError = false;
 
   static setForceError(force: boolean) {
