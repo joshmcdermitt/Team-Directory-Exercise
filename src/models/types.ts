@@ -45,6 +45,7 @@ export enum DirectoryActionType {
   PROMOTE = "PROMOTE",
   MOVE_TEAM = "MOVE_TEAM",
   TOGGLE_ACTIVE = "TOGGLE_ACTIVE",
+  SET_PEOPLE = "SET_PEOPLE",
 }
 
 export type DirectoryState = {

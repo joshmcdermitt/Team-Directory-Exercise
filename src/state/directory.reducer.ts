@@ -1,6 +1,6 @@
-import type { DirectoryState, SortMode, Team } from "../models/types";
+import type { DirectoryState, SortMode, Team, Person } from "../models/types";
 import { DirectoryActionType, Team as TeamEnum, SortMode as SortModeEnum, TeamFilter } from "../models/types";
-import { movePersonToTeam, promotePerson, toggleActive } from "../utils/directory";
+import { movePersonToTeam, promotePerson, toggleActive, normalizePeople } from "../utils/directory";
 
 export type DirectoryAction =
   | { type: DirectoryActionType.SET_TEAM; team: DirectoryState["selectedTeam"] }
@@ -9,7 +9,8 @@ export type DirectoryAction =
   | { type: DirectoryActionType.TOGGLE_SHOW_INACTIVE }
   | { type: DirectoryActionType.PROMOTE; personId: string }
   | { type: DirectoryActionType.MOVE_TEAM; personId: string; team: Team }
-  | { type: DirectoryActionType.TOGGLE_ACTIVE; personId: string };
+  | { type: DirectoryActionType.TOGGLE_ACTIVE; personId: string }
+  | { type: DirectoryActionType.SET_PEOPLE; people: Person[] };
 
 export const initialDirectoryState: DirectoryState = {
   peopleById: {},
@@ -53,6 +54,11 @@ export function directoryReducer(state: DirectoryState, action: DirectoryAction)
       const updatedPeople = toggleActive(state.peopleById, action.personId);
       if (updatedPeople === state.peopleById) return state;
       return { ...state, peopleById: updatedPeople };
+    }
+
+    case DirectoryActionType.SET_PEOPLE: {
+      const peopleById = normalizePeople(action.people);
+      return { ...state, peopleById };
     }
 
     default:

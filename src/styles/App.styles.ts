@@ -160,3 +160,84 @@ export const DebugPre = styled.pre`
   border-radius: 8px;
   overflow: auto;
 `;
+
+export const LoadingContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+  color: #666;
+`;
+
+export const ErrorContainer = styled.div`
+  padding: 16px;
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: 8px;
+  color: #c33;
+  margin: 16px 0;
+`;
+
+export const RetryButton = styled.button`
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: #c33;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  
+  &:hover:not(:disabled) {
+    background: #a22;
+  }
+  
+  &:disabled {
+    background: #999;
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+`;
+
+export const DebugControls = styled.div`
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  z-index: 1000;
+`;
+
+export const DebugButton = styled.button`
+  padding: 6px 12px;
+  background: #666;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  
+  &:hover {
+    background: #555;
+  }
+  
+  &:disabled {
+    background: #999;
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+  
+  &.error {
+    background: #c33;
+    
+    &:hover:not(:disabled) {
+      background: #a22;
+    }
+    
+    &:disabled {
+      background: #d66;
+    }
+  }
+`;

@@ -1,8 +1,9 @@
-import { useMemo, useReducer } from "react";
+import { useMemo, useReducer, useEffect } from "react";
 import type { Team } from "./models/types";
 import { DirectoryActionType, TeamFilter, Team as TeamEnum } from "./models/types";
-import { seedPeople } from "./data/seed";
-import { normalizePeople } from "./utils/directory";
+import { usePeople } from "./hooks/usePeople";
+import { ApiService } from "./services/api";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   directoryReducer,
   initialDirectoryState,
@@ -42,27 +43,103 @@ import {
   TeamSelect,
   DebugContainer,
   DebugPre,
+  LoadingContainer,
+  ErrorContainer,
+  RetryButton,
+  DebugControls,
+  DebugButton,
 } from "./styles/App.styles";
 
 export default function App() {
-  const [state, dispatch] = useReducer(
-    directoryReducer,
-    undefined,
-    () => ({
-      ...initialDirectoryState,
-      peopleById: normalizePeople(seedPeople),
-    })
-  );
+  const [state, dispatch] = useReducer(directoryReducer, initialDirectoryState);
+  const { data: people, isLoading, error, refetch, isFetching } = usePeople();
+  const queryClient = useQueryClient();
+
+  // Update reducer when people data changes
+  useEffect(() => {
+    if (people) {
+      dispatch({ type: DirectoryActionType.SET_PEOPLE, people });
+    }
+  }, [people]);
+
+  const handleSimulateError = () => {
+    console.log("Simulating error");
+    ApiService.setForceError(true);
+    // Reset the query to clear any previous error state, then refetch
+    queryClient.resetQueries({ queryKey: ["people"] });
+    refetch();
+  };
 
   const allPeople = useMemo(() => selectDenormalizedPeople(state), [state]);
   const visiblePeople = useMemo(() => selectVisiblePeople(state), [state]);
   const grouped = useMemo(() => selectGroupedByTeam(state), [state]);
   const stats = useMemo(() => selectTeamStats(state), [state]);
 
+  // Show loading state
+  if (isLoading) {
+    return (
+      <Container>
+        <Title>Team Directory</Title>
+        <LoadingContainer>
+          Loading team data...
+        </LoadingContainer>
+      </Container>
+    );
+  }
+  // Show error state
+  if (error) {
+    return (
+      <Container>
+        <Title>Team Directory</Title>
+        <ErrorContainer>
+          <strong>Error:</strong> {error.message}
+          <br />
+          Please try again later.
+          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+            <RetryButton 
+              onClick={() => {
+                console.log("Retry clicked");
+                // Reset the query to clear any previous error state, then refetch
+                queryClient.resetQueries({ queryKey: ["people"] });
+                refetch();
+              }}
+              disabled={isFetching}
+            >
+              Retry {isFetching ? '...' : ''}
+            </RetryButton>
+            <RetryButton 
+              onClick={() => {
+                console.log("Reset & Retry clicked");
+                ApiService.setForceError(false);
+                // Reset the query to clear any previous error state, then refetch
+                queryClient.resetQueries({ queryKey: ["people"] });
+                refetch();
+              }}
+              disabled={isFetching}
+            >
+              Reset & Retry {isFetching ? '...' : ''}
+            </RetryButton>
+          </div>
+        </ErrorContainer>
+      </Container>
+    );
+  }
+
   return (
     <Container>
       <Title>Team Directory</Title>
 
+      {/* Debug Controls */}
+      <DebugControls>
+        <div style={{ fontSize: '12px', marginBottom: '8px' }}>Debug:</div>
+        <DebugButton 
+          onClick={handleSimulateError} 
+          className="error"
+          disabled={isFetching}
+        >
+          Simulate Error
+        </DebugButton>
+      </DebugControls>
       {/* Controls */}
       <ControlsContainer>
         <Label>
