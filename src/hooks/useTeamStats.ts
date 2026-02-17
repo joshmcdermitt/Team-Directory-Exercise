@@ -44,7 +44,7 @@ export const useTeamStats = (allPeople: Person[]) => {
         total: stats.total,
         active: stats.active,
         managers: stats.managers,
-        avgLevel: stats.total > 0 ? stats.totalLevel / stats.total : 0
+        avgLevel: stats.total > 0 ? Math.round((stats.totalLevel / stats.total) * 10) / 10 : 0
       };
     });
 
